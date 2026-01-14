@@ -6,11 +6,21 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body>
+
   <h2 id="status">載入中...</h2>
   <p id="name"></p>
-  <button onclick="testAdd()">加購 手工餅乾</button>
 
+  <button onclick="testAdd()">➕ 加購 手工餅乾</button>
+
+  <hr>
+
+  <h3>🛒 我的購物車</h3>
+  <div id="cart"><i>尚未加入任何商品</i></div>
+  <p id="cart-total"></p>
+
+  <!-- ========================= -->
   <!-- 主程式 -->
+  <!-- ========================= -->
   <script type="module">
     // =========================
     // Firebase SDK
@@ -21,7 +31,8 @@
       doc,
       setDoc,
       getDoc,
-      serverTimestamp
+      serverTimestamp,
+      onSnapshot
     } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -75,11 +86,45 @@
         updatedAt: serverTimestamp()
       });
 
-      alert("✅ 已加入購物車");
       console.log("🛒 訂單更新完成", orderId);
     }
 
-    // 👉 掛到 window，讓 HTML 按鈕能呼叫
+    // =========================
+    // C-1. 即時顯示我的購物車
+    // =========================
+    async function watchMyOrder(shopId) {
+      const profile = await liff.getProfile();
+      const userId = profile.userId;
+      const orderId = `${shopId}_${userId}`;
+      const orderRef = doc(db, "orders", orderId);
+
+      onSnapshot(orderRef, snap => {
+        const cart = document.getElementById("cart");
+        const total = document.getElementById("cart-total");
+
+        if (!snap.exists()) {
+          cart.innerHTML = "<i>尚未加入任何商品</i>";
+          total.innerText = "";
+          return;
+        }
+
+        const data = snap.data();
+        cart.innerHTML = "";
+
+        data.items.forEach(item => {
+          const div = document.createElement("div");
+          div.innerText =
+            `${item.name} × ${item.qty} ＝ $${item.price * item.qty}`;
+          cart.appendChild(div);
+        });
+
+        total.innerText = `💰 總金額：$${data.totalAmount}`;
+      });
+    }
+
+    // =========================
+    // 提供給按鈕呼叫
+    // =========================
     window.testAdd = () => {
       upsertMyOrder("shop001", {
         productId: "p001",
@@ -90,7 +135,7 @@
     };
 
     // =========================
-    // LIFF 初始化（最重要）
+    // LIFF 初始化
     // =========================
     const LIFF_ID = "2008849957-uFo5FsLU";
 
@@ -100,14 +145,17 @@
           liff.login();
           return;
         }
-
         return liff.getProfile();
       })
       .then(profile => {
         if (!profile) return;
+
         document.getElementById("status").innerText = "登入成功";
         document.getElementById("name").innerText =
           "你好，" + profile.displayName;
+
+        // 🔥 啟動購物車即時監聽
+        watchMyOrder("shop001");
       })
       .catch(err => {
         document.getElementById("status").innerText = "錯誤：" + err;
