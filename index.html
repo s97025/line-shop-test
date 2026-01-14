@@ -51,6 +51,27 @@
   const db = getFirestore(app);
 
   // =========================
+  // B-1. 取得團購狀態（是否結單）
+  // =========================
+  async function getShopStatus(shopId) {
+    const ref = doc(db, "products", shopId);
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) return { closed: false };
+
+    const data = snap.data();
+    if (!data.closeAt) return { closed: false };
+
+    const now = new Date();
+    const closeAt = data.closeAt.toDate();
+
+    return {
+      closed: now >= closeAt,
+      closeAt
+    };
+  }
+
+  // =========================
   // A. 一人一單（可加購）
   // =========================
   async function upsertMyOrder(shopId, item) {
@@ -84,11 +105,12 @@
     });
   }
 
-  
   // =========================
-  // A-1. 商品列表（從 Firestore）
+  // A-1 + B. 商品列表（結單判斷）
   // =========================
   async function loadProducts(shopId) {
+    const shopStatus = await getShopStatus(shopId);
+
     const q = query(
       collection(db, "products", shopId, "items"),
       where("enabled", "==", true),
@@ -99,28 +121,39 @@
     const container = document.getElementById("product-list");
     container.innerHTML = "";
 
+    if (shopStatus.closed) {
+      const note = document.createElement("p");
+      note.innerText = "⛔ 本團購已結單";
+      note.style.color = "red";
+      container.appendChild(note);
+    }
+
     snap.forEach(docSnap => {
       const p = docSnap.data();
-
-      const btn = document.createElement("button");
-      btn.innerText = `＋ 加購 ${p.name}  $${p.price}`;
-      btn.onclick = () => {
-        upsertMyOrder(shopId, {
-          productId: docSnap.id,
-          name: p.name,
-          price: p.price
-        });
-      };
-
       const div = document.createElement("div");
       div.style.marginBottom = "6px";
-      div.appendChild(btn);
+
+      if (!shopStatus.closed) {
+        const btn = document.createElement("button");
+        btn.innerText = `＋ 加購 ${p.name}  $${p.price}`;
+        btn.onclick = () => {
+          upsertMyOrder(shopId, {
+            productId: docSnap.id,
+            name: p.name,
+            price: p.price
+          });
+        };
+        div.appendChild(btn);
+      } else {
+        div.innerText = `${p.name}  $${p.price}`;
+      }
+
       container.appendChild(div);
     });
   }
 
   // =========================
-  // C-1. 即時購物車
+  // C-1. 即時購物車（結單後仍可看）
   // =========================
   async function watchMyOrder(shopId) {
     const profile = await liff.getProfile();
