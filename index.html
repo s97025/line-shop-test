@@ -5,9 +5,8 @@
   <title>LIFF 團購</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    button:disabled {
-      opacity: 0.5;
-    }
+    button:disabled { opacity: 0.5; }
+    .stat { margin-left:6px;color:#555;font-size:12px; }
   </style>
 </head>
 <body>
@@ -29,9 +28,6 @@
 <button id="submit-btn">📤 送出訂單</button>
 
 <script type="module">
-  // =========================
-  // Firebase SDK
-  // =========================
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
   import {
     getFirestore,
@@ -65,56 +61,55 @@
   let productStats = {};
 
   // =========================
-  // 取得統計目前訂單累積數量狀態
+  // 商品統計（幾人 / 幾件）
   // =========================
-  function watchProductStats(shopId) {
+  function watchProductStats() {
     const q = query(
       collection(db, "orders"),
-      where("shopId", "==", shopId)
+      where("shopId", "==", SHOP_ID)
     );
-  
+
     onSnapshot(q, snap => {
       const stats = {};
-  
+
       snap.forEach(docSnap => {
         const data = docSnap.data();
         if (!data.items) return;
-  
+
         data.items.forEach(item => {
           if (!stats[item.productId]) {
             stats[item.productId] = { people: 0, buyerCount: 0 };
           }
           stats[item.productId].people += 1;
-          stats[item.productId].buyerCount += item.buyerCount;
+          stats[item.productId].buyerCount += item.qty;
         });
       });
-  
+
       productStats = stats;
-  
-      // 🔥 重新渲染商品列表（只更新數字）
       updateProductStatsUI();
     });
   }
 
-  
+  function updateProductStatsUI() {
+    document.querySelectorAll("[data-product-id]").forEach(div => {
+      const pid = div.dataset.productId;
+      const stat = productStats[pid];
+      const span = div.querySelector(".stat");
+
+      span.innerText = stat
+        ? `👥 ${stat.people} 人 · ${stat.buyerCount} 件`
+        : `👥 0 人 · 0 件`;
+    });
+  }
+
   // =========================
-  // 取得結單狀態
+  // 結單狀態
   // =========================
   async function getShopStatus() {
-    const ref = doc(db, "products", SHOP_ID);
-    const snap = await getDoc(ref);
-
-    if (!snap.exists() || !snap.data().closeAt) {
-      return { closed: false };
-    }
-
+    const snap = await getDoc(doc(db, "products", SHOP_ID));
+    if (!snap.exists() || !snap.data().closeAt) return { closed:false };
     const closeAt = snap.data().closeAt.toDate();
-    const now = new Date();
-
-    return {
-      closed: now >= closeAt,
-      closeAt
-    };
+    return { closed: new Date() >= closeAt, closeAt };
   }
 
   // =========================
@@ -125,13 +120,10 @@
     SHOP_CLOSED = status.closed;
 
     const statusBox = document.getElementById("shop-status");
-    if (status.closed) {
-      statusBox.innerText = `⛔ 已結單（${status.closeAt.toLocaleString()}）`;
-      statusBox.style.color = "red";
-    } else {
-      statusBox.innerText = `🟢 結單時間：${status.closeAt.toLocaleString()}`;
-      statusBox.style.color = "green";
-    }
+    statusBox.innerText = status.closed
+      ? `⛔ 已結單（${status.closeAt.toLocaleString()}）`
+      : `🟢 結單時間：${status.closeAt.toLocaleString()}`;
+    statusBox.style.color = status.closed ? "red" : "green";
 
     const q = query(
       collection(db, "products", SHOP_ID, "items"),
@@ -146,45 +138,42 @@
     snap.forEach(docSnap => {
       const p = docSnap.data();
 
+      const div = document.createElement("div");
+      div.dataset.productId = docSnap.id;
+      div.style.marginBottom = "6px";
+
+      const stat = productStats[docSnap.id];
+      div.innerHTML = `
+        ${p.name} $${p.price}
+        <span class="stat">
+          👥 ${stat ? stat.people : 0} 人 · ${stat ? stat.buyerCount : 0} 件
+        </span>
+      `;
+
       const btn = document.createElement("button");
       btn.innerText = SHOP_CLOSED ? "已結單" : "加入購物車";
       btn.disabled = SHOP_CLOSED;
+      btn.onclick = () => !SHOP_CLOSED && upsertMyOrder(docSnap.id, p);
 
-      btn.onclick = () => {
-        if (!SHOP_CLOSED) {
-          upsertMyOrder({
-            productId: docSnap.id,
-            name: p.name,
-            price: p.price
-          });
-        }
-      };
-
-      const div = document.createElement("div");
-      div.style.marginBottom = "6px";
-      div.innerHTML = `${p.name} $${p.price} `;
       div.appendChild(btn);
       container.appendChild(div);
     });
   }
 
   // =========================
-  // 加入購物車（一人一單）
+  // 加購
   // =========================
-  async function upsertMyOrder(item) {
+  async function upsertMyOrder(productId, p) {
     const profile = await liff.getProfile();
-    const orderId = `${SHOP_ID}_${profile.userId}`;
-    const ref = doc(db, "orders", orderId);
+    const ref = doc(db, "orders", `${SHOP_ID}_${profile.userId}`);
     const snap = await getDoc(ref);
 
-    let items = [];
-    if (snap.exists()) items = snap.data().items || [];
-
-    const idx = items.findIndex(i => i.productId === item.productId);
+    let items = snap.exists() ? snap.data().items || [] : [];
+    const idx = items.findIndex(i => i.productId === productId);
     if (idx >= 0) items[idx].qty += 1;
-    else items.push({ ...item, qty: 1 });
+    else items.push({ productId, name:p.name, price:p.price, qty:1 });
 
-    const totalAmount = items.reduce((s, i) => s + i.price * i.qty, 0);
+    const totalAmount = items.reduce((s,i)=>s+i.price*i.qty,0);
 
     await setDoc(ref, {
       shopId: SHOP_ID,
@@ -197,7 +186,7 @@
   }
 
   // =========================
-  // 即時購物車
+  // 購物車
   // =========================
   async function watchCart() {
     const profile = await liff.getProfile();
@@ -214,53 +203,38 @@
         return;
       }
 
-      const data = snap.data();
+      const d = snap.data();
       cart.innerHTML = "";
-
-      data.items.forEach(i => {
-        const div = document.createElement("div");
-        div.innerText = `${i.name} × ${i.qty} = $${i.price * i.qty}`;
-        cart.appendChild(div);
+      d.items.forEach(i=>{
+        cart.innerHTML += `<div>${i.name} × ${i.qty} = $${i.price*i.qty}</div>`;
       });
+      total.innerText = `💰 總金額：$${d.totalAmount}`;
 
-      total.innerText = `💰 總金額：$${data.totalAmount}`;
-
-      submitBtn.disabled = SHOP_CLOSED || !!data.submittedAt;
-      submitBtn.innerText = SHOP_CLOSED
-        ? "已結單"
-        : data.submittedAt ? "已送出" : "📤 送出訂單";
+      submitBtn.disabled = SHOP_CLOSED || !!d.submittedAt;
+      submitBtn.innerText = SHOP_CLOSED ? "已結單" : d.submittedAt ? "已送出" : "📤 送出訂單";
     });
 
     submitBtn.onclick = async () => {
       if (SHOP_CLOSED) return;
-      await updateDoc(ref, { submittedAt: serverTimestamp() });
+      await updateDoc(ref,{ submittedAt: serverTimestamp() });
       alert("✅ 訂單已送出");
     };
   }
 
   // =========================
-  // LIFF 初始化
+  // LIFF init
   // =========================
   const LIFF_ID = "2008849957-uFo5FsLU";
 
   liff.init({ liffId: LIFF_ID })
-    .then(() => {
-      if (!liff.isLoggedIn()) {
-        liff.login();
-        return;
-      }
-      return liff.getProfile();
-    })
-    .then(profile => {
-      if (!profile) return;
+    .then(()=>liff.isLoggedIn()?liff.getProfile():liff.login())
+    .then(p=>{
+      if (!p) return;
       document.getElementById("status").innerText = "登入成功";
-      document.getElementById("name").innerText = "你好，" + profile.displayName;
+      document.getElementById("name").innerText = "你好，"+p.displayName;
       loadProducts();
       watchCart();
-    })
-    .catch(err => {
-      document.getElementById("status").innerText = "錯誤：" + err;
-      console.error(err);
+      watchProductStats();
     });
 </script>
 
