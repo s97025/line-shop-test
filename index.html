@@ -62,7 +62,41 @@
 
   const SHOP_ID = "shop001";
   let SHOP_CLOSED = false;
+  let productStats = {};
 
+  // =========================
+  // 取得統計目前訂單累積數量狀態
+  // =========================
+  function watchProductStats(shopId) {
+    const q = query(
+      collection(db, "orders"),
+      where("shopId", "==", shopId)
+    );
+  
+    onSnapshot(q, snap => {
+      const stats = {};
+  
+      snap.forEach(docSnap => {
+        const data = docSnap.data();
+        if (!data.items) return;
+  
+        data.items.forEach(item => {
+          if (!stats[item.productId]) {
+            stats[item.productId] = { people: 0, buyerCount: 0 };
+          }
+          stats[item.productId].people += 1;
+          stats[item.productId].buyerCount += item.buyerCount;
+        });
+      });
+  
+      productStats = stats;
+  
+      // 🔥 重新渲染商品列表（只更新數字）
+      updateProductStatsUI();
+    });
+  }
+
+  
   // =========================
   // 取得結單狀態
   // =========================
