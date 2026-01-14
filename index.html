@@ -1,242 +1,251 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <title>LIFF 團購</title>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <style>
-    button:disabled { opacity: 0.5; }
-    .stat { margin-left:6px;color:#555;font-size:12px; }
-  </style>
+<meta charset="UTF-8">
+<title>LIFF 團購</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  button { margin:2px; }
+  button:disabled { opacity:0.5; }
+  .card { border:1px solid #ddd; padding:8px; margin-bottom:8px; }
+  .small { font-size:12px; color:#555; }
+</style>
 </head>
 <body>
 
 <h2 id="status">載入中...</h2>
 <p id="name"></p>
-
-<div id="shop-status" style="margin-bottom:10px;font-weight:bold;"></div>
+<div id="shop-status" style="font-weight:bold;margin-bottom:10px;"></div>
 
 <h3>🛒 商品列表</h3>
 <div id="product-list"></div>
 
 <hr>
 
-<h3>🧺 我的購物車</h3>
-<div id="cart"><i>尚未加入任何商品</i></div>
-<p id="cart-total"></p>
-
+<h3>🧺 購物車（尚未送出）</h3>
+<div id="draft-cart"><i>尚未加入任何商品</i></div>
+<p id="draft-total"></p>
 <button id="submit-btn">📤 送出訂單</button>
 
+<hr>
+
+<h3>📦 已送出訂單</h3>
+<div id="submitted-orders"><i>尚無已送出訂單</i></div>
+
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-  import {
-    getFirestore,
-    collection,
-    query,
-    where,
-    orderBy,
-    getDocs,
-    doc,
-    setDoc,
-    getDoc,
-    updateDoc,
-    serverTimestamp,
-    onSnapshot
-  } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getFirestore, collection, query, where, orderBy,
+  getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc,
+  serverTimestamp, onSnapshot, Timestamp
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyAk5SaAAvifvTV3dUW4mddRvvgySbdIysc",
-    authDomain: "line-shop-ef578.firebaseapp.com",
-    projectId: "line-shop-ef578",
-    storageBucket: "line-shop-ef578.firebasestorage.app",
-    messagingSenderId: "909569598609",
-    appId: "1:909569598609:web:e97cd2760f1df886114b30"
-  };
+const firebaseConfig = {
+  apiKey: "AIzaSyAk5SaAAvifvTV3dUW4mddRvvgySbdIysc",
+  authDomain: "line-shop-ef578.firebaseapp.com",
+  projectId: "line-shop-ef578",
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+const SHOP_ID = "shop001";
+let USER = null;
+let SHOP_CLOSE_AT = null;
+let SHOP_CLOSED = false;
 
-  const SHOP_ID = "shop001";
-  let SHOP_CLOSED = false;
-  let productStats = {};
+/* =========================
+   Shop Status
+========================= */
+async function loadShopStatus() {
+  const snap = await getDoc(doc(db,"products",SHOP_ID));
+  if (!snap.exists() || !snap.data().closeAt) return;
 
-  // =========================
-  // 商品統計（幾人 / 幾件）
-  // =========================
-  function watchProductStats() {
-    const q = query(
-      collection(db, "orders"),
-      where("shopId", "==", SHOP_ID)
-    );
+  SHOP_CLOSE_AT = snap.data().closeAt.toDate();
+  SHOP_CLOSED = new Date() >= SHOP_CLOSE_AT;
 
-    onSnapshot(q, snap => {
-      const stats = {};
+  const el = document.getElementById("shop-status");
+  el.innerText = SHOP_CLOSED
+    ? `⛔ 已結單（${SHOP_CLOSE_AT.toLocaleString()}）`
+    : `🟢 結單時間：${SHOP_CLOSE_AT.toLocaleString()}`;
+  el.style.color = SHOP_CLOSED ? "red" : "green";
+}
 
-      snap.forEach(docSnap => {
-        const data = docSnap.data();
-        if (!data.items) return;
+/* =========================
+   商品列表
+========================= */
+async function loadProducts() {
+  const q = query(
+    collection(db,"products",SHOP_ID,"items"),
+    where("enabled","==",true),
+    orderBy("sort","asc")
+  );
+  const snap = await getDocs(q);
+  const box = document.getElementById("product-list");
+  box.innerHTML = "";
 
-        data.items.forEach(item => {
-          if (!stats[item.productId]) {
-            stats[item.productId] = { people: 0, buyerCount: 0 };
-          }
-          stats[item.productId].people += 1;
-          stats[item.productId].buyerCount += item.qty;
-        });
-      });
+  snap.forEach(d=>{
+    const p=d.data();
+    const div=document.createElement("div");
+    div.className="card";
+    div.innerHTML = `<b>${p.name}</b> $${p.price}`;
 
-      productStats = stats;
-      updateProductStatsUI();
-    });
-  }
+    const btn=document.createElement("button");
+    btn.innerText="加入購物車";
+    btn.disabled = SHOP_CLOSED;
+    btn.onclick=()=>addToDraft(d.id,p);
 
-  function updateProductStatsUI() {
-    document.querySelectorAll("[data-product-id]").forEach(div => {
-      const pid = div.dataset.productId;
-      const stat = productStats[pid];
-      const span = div.querySelector(".stat");
+    div.appendChild(btn);
+    box.appendChild(div);
+  });
+}
 
-      span.innerText = stat
-        ? `👥 ${stat.people} 人 · ${stat.buyerCount} 件`
-        : `👥 0 人 · 0 件`;
-    });
-  }
+/* =========================
+   Draft（購物車）
+========================= */
+function draftRef(){
+  return doc(db,"orders",`${SHOP_ID}_${USER.userId}_draft`);
+}
 
-  // =========================
-  // 結單狀態
-  // =========================
-  async function getShopStatus() {
-    const snap = await getDoc(doc(db, "products", SHOP_ID));
-    if (!snap.exists() || !snap.data().closeAt) return { closed:false };
-    const closeAt = snap.data().closeAt.toDate();
-    return { closed: new Date() >= closeAt, closeAt };
-  }
+async function addToDraft(pid,p){
+  if (SHOP_CLOSED) return;
+  const ref=draftRef();
+  const snap=await getDoc(ref);
+  let items=[];
+  if (snap.exists()) items=snap.data().items||[];
 
-  // =========================
-  // 商品列表
-  // =========================
-  async function loadProducts() {
-    const status = await getShopStatus();
-    SHOP_CLOSED = status.closed;
+  const i=items.find(x=>x.productId===pid);
+  if (i) i.qty++;
+  else items.push({productId:pid,name:p.name,price:p.price,qty:1});
 
-    const statusBox = document.getElementById("shop-status");
-    statusBox.innerText = status.closed
-      ? `⛔ 已結單（${status.closeAt.toLocaleString()}）`
-      : `🟢 結單時間：${status.closeAt.toLocaleString()}`;
-    statusBox.style.color = status.closed ? "red" : "green";
+  await setDoc(ref,{
+    shopId:SHOP_ID,userId:USER.userId,
+    status:"draft",
+    items,
+    updatedAt:serverTimestamp()
+  });
+}
 
-    const q = query(
-      collection(db, "products", SHOP_ID, "items"),
-      where("enabled", "==", true),
-      orderBy("sort", "asc")
-    );
-
-    const snap = await getDocs(q);
-    const container = document.getElementById("product-list");
-    container.innerHTML = "";
-
-    snap.forEach(docSnap => {
-      const p = docSnap.data();
-
-      const div = document.createElement("div");
-      div.dataset.productId = docSnap.id;
-      div.style.marginBottom = "6px";
-
-      const stat = productStats[docSnap.id];
-      div.innerHTML = `
-        ${p.name} $${p.price}
-        <span class="stat">
-          👥 ${stat ? stat.people : 0} 人 · ${stat ? stat.buyerCount : 0} 件
-        </span>
+function watchDraft(){
+  onSnapshot(draftRef(),snap=>{
+    const box=document.getElementById("draft-cart");
+    const totalEl=document.getElementById("draft-total");
+    if (!snap.exists()){
+      box.innerHTML="<i>尚未加入任何商品</i>";
+      totalEl.innerText="";
+      return;
+    }
+    const d=snap.data();
+    let total=0;
+    box.innerHTML="";
+    d.items.forEach(it=>{
+      total+=it.price*it.qty;
+      const div=document.createElement("div");
+      div.innerHTML=`
+        ${it.name} × ${it.qty}
+        <button ${SHOP_CLOSED?"disabled":""} onclick="updateQty('${it.productId}',1)">＋</button>
+        <button ${SHOP_CLOSED?"disabled":""} onclick="updateQty('${it.productId}',-1)">－</button>
+        <button ${SHOP_CLOSED?"disabled":""} onclick="removeItem('${it.productId}')">刪除</button>
       `;
-
-      const btn = document.createElement("button");
-      btn.innerText = SHOP_CLOSED ? "已結單" : "加入購物車";
-      btn.disabled = SHOP_CLOSED;
-      btn.onclick = () => !SHOP_CLOSED && upsertMyOrder(docSnap.id, p);
-
-      div.appendChild(btn);
-      container.appendChild(div);
+      box.appendChild(div);
     });
-  }
+    totalEl.innerText=`💰 總金額：$${total}`;
+    document.getElementById("submit-btn").disabled = SHOP_CLOSED;
+  });
+}
 
-  // =========================
-  // 加購
-  // =========================
-  async function upsertMyOrder(productId, p) {
-    const profile = await liff.getProfile();
-    const ref = doc(db, "orders", `${SHOP_ID}_${profile.userId}`);
-    const snap = await getDoc(ref);
+window.updateQty=async(pid,delta)=>{
+  const ref=draftRef();
+  const snap=await getDoc(ref);
+  if (!snap.exists()) return;
+  let items=snap.data().items||[];
+  items=items.map(i=>{
+    if(i.productId===pid) i.qty+=delta;
+    return i;
+  }).filter(i=>i.qty>0);
+  if (items.length===0) await deleteDoc(ref);
+  else await updateDoc(ref,{items,updatedAt:serverTimestamp()});
+};
 
-    let items = snap.exists() ? snap.data().items || [] : [];
-    const idx = items.findIndex(i => i.productId === productId);
-    if (idx >= 0) items[idx].qty += 1;
-    else items.push({ productId, name:p.name, price:p.price, qty:1 });
+window.removeItem=async(pid)=>{
+  window.updateQty(pid,-999);
+};
 
-    const totalAmount = items.reduce((s,i)=>s+i.price*i.qty,0);
+document.getElementById("submit-btn").onclick=async()=>{
+  if (SHOP_CLOSED) return;
+  const snap=await getDoc(draftRef());
+  if (!snap.exists()) return;
+  const data=snap.data();
+  const now=new Date();
+  const cancelDeadline=new Date(SHOP_CLOSE_AT.getTime()-24*60*60*1000);
 
-    await setDoc(ref, {
-      shopId: SHOP_ID,
-      userId: profile.userId,
-      displayName: profile.displayName,
-      items,
-      totalAmount,
-      updatedAt: serverTimestamp()
-    });
-  }
+  await setDoc(doc(db,"orders",`${SHOP_ID}_${USER.userId}_${now.getTime()}`),{
+    ...data,
+    status:"submitted",
+    submittedAt:serverTimestamp(),
+    cancelDeadline:Timestamp.fromDate(cancelDeadline)
+  });
+  await deleteDoc(draftRef());
+};
 
-  // =========================
-  // 購物車
-  // =========================
-  async function watchCart() {
-    const profile = await liff.getProfile();
-    const ref = doc(db, "orders", `${SHOP_ID}_${profile.userId}`);
-    const submitBtn = document.getElementById("submit-btn");
-
-    onSnapshot(ref, snap => {
-      const cart = document.getElementById("cart");
-      const total = document.getElementById("cart-total");
-
-      if (!snap.exists()) {
-        cart.innerHTML = "<i>尚未加入任何商品</i>";
-        total.innerText = "";
-        return;
-      }
-
-      const d = snap.data();
-      cart.innerHTML = "";
-      d.items.forEach(i=>{
-        cart.innerHTML += `<div>${i.name} × ${i.qty} = $${i.price*i.qty}</div>`;
+/* =========================
+   Submitted Orders
+========================= */
+function watchSubmitted(){
+  const q=query(
+    collection(db,"orders"),
+    where("shopId","==",SHOP_ID),
+    where("userId","==",USER.userId),
+    where("status","==","submitted"),
+    orderBy("submittedAt","desc")
+  );
+  onSnapshot(q,snap=>{
+    const box=document.getElementById("submitted-orders");
+    box.innerHTML="";
+    if (snap.empty){
+      box.innerHTML="<i>尚無已送出訂單</i>";
+      return;
+    }
+    snap.forEach(d=>{
+      const o=d.data();
+      const div=document.createElement("div");
+      div.className="card";
+      let html=`<div class="small">送出時間：${o.submittedAt?.toDate().toLocaleString()}</div>`;
+      o.items.forEach(i=>{
+        html+=`<div>${i.name} × ${i.qty}</div>`;
       });
-      total.innerText = `💰 總金額：$${d.totalAmount}`;
-
-      submitBtn.disabled = SHOP_CLOSED || !!d.submittedAt;
-      submitBtn.innerText = SHOP_CLOSED ? "已結單" : d.submittedAt ? "已送出" : "📤 送出訂單";
+      const remain=o.cancelDeadline
+        ? Math.max(0,Math.floor((o.cancelDeadline.toDate()-Date.now())/3600000))
+        : 0;
+      if (remain>0){
+        html+=`<button onclick="cancelOrder('${d.id}')">反悔取消（${remain}h）</button>`;
+      }
+      div.innerHTML=html;
+      box.appendChild(div);
     });
+  });
+}
 
-    submitBtn.onclick = async () => {
-      if (SHOP_CLOSED) return;
-      await updateDoc(ref,{ submittedAt: serverTimestamp() });
-      alert("✅ 訂單已送出");
-    };
-  }
+window.cancelOrder=async(id)=>{
+  await deleteDoc(doc(db,"orders",id));
+};
 
-  // =========================
-  // LIFF init
-  // =========================
-  const LIFF_ID = "2008849957-uFo5FsLU";
-
-  liff.init({ liffId: LIFF_ID })
-    .then(()=>liff.isLoggedIn()?liff.getProfile():liff.login())
-    .then(p=>{
-      if (!p) return;
-      document.getElementById("status").innerText = "登入成功";
-      document.getElementById("name").innerText = "你好，"+p.displayName;
-      loadProducts();
-      watchCart();
-      watchProductStats();
-    });
+/* =========================
+   LIFF init
+========================= */
+const LIFF_ID="2008849957-uFo5FsLU";
+liff.init({liffId:LIFF_ID}).then(()=>{
+  if(!liff.isLoggedIn()) return liff.login();
+  return liff.getProfile();
+}).then(p=>{
+  USER=p;
+  document.getElementById("status").innerText="登入成功";
+  document.getElementById("name").innerText="你好，"+p.displayName;
+  loadShopStatus().then(()=>{
+    loadProducts();
+    watchDraft();
+    watchSubmitted();
+  });
+});
 </script>
-
 </body>
 </html>
