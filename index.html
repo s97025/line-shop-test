@@ -40,21 +40,30 @@ import {
   serverTimestamp, onSnapshot, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+/* =========================
+   Firebase init
+========================= */
 const firebaseConfig = {
   apiKey: "AIzaSyAk5SaAAvifvTV3dUW4mddRvvgySbdIysc",
   authDomain: "line-shop-ef578.firebaseapp.com",
-  projectId: "line-shop-ef578",
+  projectId: "line-shop-ef578"
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+/* =========================
+   Global state
+========================= */
 const SHOP_ID = "shop001";
 let USER = null;
 let SHOP_CLOSE_AT = null;
 let SHOP_CLOSED = false;
 
+/* 🔥 新增：商品統計（buyerCount） */
+let productStats = {};
+
 /* =========================
-   Shop Status
+   Shop status
 ========================= */
 async function loadShopStatus() {
   const snap = await getDoc(doc(db,"products",SHOP_ID));
@@ -87,7 +96,16 @@ async function loadProducts() {
     const p=d.data();
     const div=document.createElement("div");
     div.className="card";
-    div.innerHTML = `<b>${p.name}</b> $${p.price}`;
+    div.dataset.productId = d.id;
+
+    const stat = productStats[d.id];
+
+    div.innerHTML = `
+      <b>${p.name}</b> $${p.price}
+      <div class="small stat">
+        已訂購：${stat ? stat.buyerCount : 0}
+      </div>
+    `;
 
     const btn=document.createElement("button");
     btn.innerText="加入購物車";
@@ -96,6 +114,44 @@ async function loadProducts() {
 
     div.appendChild(btn);
     box.appendChild(div);
+  });
+}
+
+/* =========================
+   🔥 新增：商品統計（只算 submitted）
+========================= */
+function watchProductStats() {
+  const q = query(
+    collection(db,"orders"),
+    where("shopId","==",SHOP_ID),
+    where("status","==","submitted")
+  );
+
+  onSnapshot(q,snap=>{
+    const stats = {};
+    snap.forEach(docSnap=>{
+      const data = docSnap.data();
+      if (!data.items) return;
+      data.items.forEach(item=>{
+        if (!stats[item.productId]) {
+          stats[item.productId] = { buyerCount: 0 };
+        }
+        stats[item.productId].buyerCount += item.qty;
+      });
+    });
+    productStats = stats;
+    updateProductStatsUI();
+  });
+}
+
+function updateProductStatsUI() {
+  document.querySelectorAll("[data-product-id]").forEach(div=>{
+    const pid = div.dataset.productId;
+    const stat = productStats[pid];
+    const el = div.querySelector(".stat");
+    if (el) {
+      el.innerText = `已訂購：${stat ? stat.buyerCount : 0}`;
+    }
   });
 }
 
@@ -118,7 +174,8 @@ async function addToDraft(pid,p){
   else items.push({productId:pid,name:p.name,price:p.price,qty:1});
 
   await setDoc(ref,{
-    shopId:SHOP_ID,userId:USER.userId,
+    shopId:SHOP_ID,
+    userId:USER.userId,
     status:"draft",
     items,
     updatedAt:serverTimestamp()
@@ -178,17 +235,20 @@ document.getElementById("submit-btn").onclick=async()=>{
   const now=new Date();
   const cancelDeadline=new Date(SHOP_CLOSE_AT.getTime()-24*60*60*1000);
 
-  await setDoc(doc(db,"orders",`${SHOP_ID}_${USER.userId}_${now.getTime()}`),{
-    ...data,
-    status:"submitted",
-    submittedAt:serverTimestamp(),
-    cancelDeadline:Timestamp.fromDate(cancelDeadline)
-  });
+  await setDoc(
+    doc(db,"orders",`${SHOP_ID}_${USER.userId}_${now.getTime()}`),
+    {
+      ...data,
+      status:"submitted",
+      submittedAt:serverTimestamp(),
+      cancelDeadline:Timestamp.fromDate(cancelDeadline)
+    }
+  );
   await deleteDoc(draftRef());
 };
 
 /* =========================
-   Submitted Orders
+   Submitted orders
 ========================= */
 function watchSubmitted(){
   const q=query(
@@ -244,6 +304,7 @@ liff.init({liffId:LIFF_ID}).then(()=>{
     loadProducts();
     watchDraft();
     watchSubmitted();
+    watchProductStats(); // 🔥 啟動商品統計
   });
 });
 </script>
