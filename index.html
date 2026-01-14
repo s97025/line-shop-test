@@ -28,6 +28,52 @@
         document.getElementById("status").innerText = "錯誤：" + err;
       });
   </script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    // Firebase SDK（v10，適合 GitHub Pages + LIFF）
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import {
+      getFirestore,
+      doc,
+      setDoc,
+      getDoc,
+      updateDoc,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+  
+    // 🔑 Firebase 設定（用你剛剛複製的）
+    const firebaseConfig = {
+      apiKey: "AIzaSyAk5SaAAvifvTV3dUW4mddRvvgySbdIysc",
+      authDomain: "line-shop-ef578.firebaseapp.com",
+      projectId: "line-shop-ef578",
+      storageBucket: "line-shop-ef578.firebasestorage.app",
+      messagingSenderId: "909569598609",
+      appId: "1:909569598609:web:e97cd2760f1df886114b30"
+    };
+  
+    // 初始化 Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+  
+    console.log("🔥 Firebase connected", db);
+  
+    // ===== 測試：寫入一筆訂單（等等會換成真的團購邏輯） =====
+    async function testWriteOrder() {
+      const testOrderRef = doc(db, "orders", "test-order-001");
+      await setDoc(testOrderRef, {
+        userId: "TEST_USER",
+        displayName: "測試使用者",
+        totalAmount: 123,
+        createdAt: serverTimestamp()
+      });
+      console.log("✅ Test order written");
+    }
+  
+    // 先跑一次測試
+    testWriteOrder();
+  </script>
+
 </body>
 </html>
 <!-- force redeploy -->
