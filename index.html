@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>LIFF 測試</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+  <h2 id="status">載入中...</h2>
+  <p id="name"></p>
+
+  <script>
+    const LIFF_ID = "貼上你的LIFF_ID";
+
+    liff.init({ liffId: LIFF_ID })
+      .then(() => {
+        if (!liff.isLoggedIn()) {
+          liff.login();
+        } else {
+          liff.getProfile().then(profile => {
+            document.getElementById("status").innerText = "登入成功";
+            document.getElementById("name").innerText =
+              "你好，" + profile.displayName;
+          });
+        }
+      })
+      .catch(err => {
+        document.getElementById("status").innerText = "錯誤：" + err;
+      });
+  </script>
+</body>
+</html>
