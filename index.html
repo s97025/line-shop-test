@@ -7,161 +7,174 @@
 </head>
 <body>
 
-  <h2 id="status">載入中...</h2>
-  <p id="name"></p>
+<h2 id="status">載入中...</h2>
+<p id="name"></p>
 
-  <button onclick="testAdd()">➕ 加購 手工餅乾</button>
+<h3>🛒 商品列表</h3>
+<div id="product-list"></div>
 
-  <hr>
+<hr>
 
-  <h3>🛒 我的購物車</h3>
-  <div id="cart"><i>尚未加入任何商品</i></div>
-  <p id="cart-total"></p>
+<h3>🛍 我的購物車</h3>
+<div id="cart"><i>尚未加入任何商品</i></div>
+<p id="cart-total"></p>
 
-  <!-- ========================= -->
-  <!-- 主程式 -->
-  <!-- ========================= -->
-  <script type="module">
-    // =========================
-    // Firebase SDK
-    // =========================
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import {
-      getFirestore,
-      doc,
-      setDoc,
-      getDoc,
-      serverTimestamp,
-      onSnapshot
-    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+<script type="module">
+  // =========================
+  // Firebase SDK
+  // =========================
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import {
+    getFirestore,
+    collection,
+    query,
+    where,
+    orderBy,
+    getDocs,
+    doc,
+    setDoc,
+    getDoc,
+    serverTimestamp,
+    onSnapshot
+  } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyAk5SaAAvifvTV3dUW4mddRvvgySbdIysc",
-      authDomain: "line-shop-ef578.firebaseapp.com",
-      projectId: "line-shop-ef578",
-      storageBucket: "line-shop-ef578.firebasestorage.app",
-      messagingSenderId: "909569598609",
-      appId: "1:909569598609:web:e97cd2760f1df886114b30"
-    };
+  const firebaseConfig = {
+    apiKey: "AIzaSyAk5SaAAvifvTV3dUW4mddRvvgySbdIysc",
+    authDomain: "line-shop-ef578.firebaseapp.com",
+    projectId: "line-shop-ef578",
+    storageBucket: "line-shop-ef578.firebasestorage.app",
+    messagingSenderId: "909569598609",
+    appId: "1:909569598609:web:e97cd2760f1df886114b30"
+  };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
 
-    // =========================
-    // A. 一人一單（可加購）
-    // =========================
-    async function upsertMyOrder(shopId, item) {
-      const profile = await liff.getProfile();
-      const userId = profile.userId;
-      const displayName = profile.displayName;
+  // =========================
+  // A. 一人一單（可加購）
+  // =========================
+  async function upsertMyOrder(shopId, item) {
+    const profile = await liff.getProfile();
+    const userId = profile.userId;
+    const displayName = profile.displayName;
 
-      const orderId = `${shopId}_${userId}`;
-      const orderRef = doc(db, "orders", orderId);
+    const orderId = `${shopId}_${userId}`;
+    const orderRef = doc(db, "orders", orderId);
+    const snap = await getDoc(orderRef);
 
-      const snap = await getDoc(orderRef);
+    let items = [];
+    if (snap.exists()) items = snap.data().items || [];
 
-      let items = [];
-      if (snap.exists()) {
-        items = snap.data().items || [];
-      }
+    const idx = items.findIndex(i => i.productId === item.productId);
+    if (idx >= 0) items[idx].qty += 1;
+    else items.push({ ...item, qty: 1 });
 
-      const idx = items.findIndex(i => i.productId === item.productId);
-      if (idx >= 0) {
-        items[idx].qty += item.qty;
-      } else {
-        items.push(item);
-      }
+    const totalAmount = items.reduce(
+      (sum, i) => sum + i.price * i.qty,
+      0
+    );
 
-      const totalAmount = items.reduce(
-        (sum, i) => sum + i.price * i.qty,
-        0
-      );
+    await setDoc(orderRef, {
+      shopId,
+      userId,
+      displayName,
+      items,
+      totalAmount,
+      updatedAt: serverTimestamp()
+    });
+  }
 
-      await setDoc(orderRef, {
-        shopId,
-        userId,
-        displayName,
-        items,
-        totalAmount,
-        updatedAt: serverTimestamp()
-      });
+  // =========================
+  // A-1. 商品列表（從 Firestore）
+  // =========================
+  async function loadProducts(shopId) {
+    const q = query(
+      collection(db, "products", shopId, "items"),
+      where("enabled", "==", true),
+      orderBy("sort", "asc")
+    );
 
-      console.log("🛒 訂單更新完成", orderId);
-    }
+    const snap = await getDocs(q);
+    const container = document.getElementById("product-list");
+    container.innerHTML = "";
 
-    // =========================
-    // C-1. 即時顯示我的購物車
-    // =========================
-    async function watchMyOrder(shopId) {
-      const profile = await liff.getProfile();
-      const userId = profile.userId;
-      const orderId = `${shopId}_${userId}`;
-      const orderRef = doc(db, "orders", orderId);
+    snap.forEach(docSnap => {
+      const p = docSnap.data();
 
-      onSnapshot(orderRef, snap => {
-        const cart = document.getElementById("cart");
-        const total = document.getElementById("cart-total");
-
-        if (!snap.exists()) {
-          cart.innerHTML = "<i>尚未加入任何商品</i>";
-          total.innerText = "";
-          return;
-        }
-
-        const data = snap.data();
-        cart.innerHTML = "";
-
-        data.items.forEach(item => {
-          const div = document.createElement("div");
-          div.innerText =
-            `${item.name} × ${item.qty} ＝ $${item.price * item.qty}`;
-          cart.appendChild(div);
+      const btn = document.createElement("button");
+      btn.innerText = `＋ 加購 ${p.name}  $${p.price}`;
+      btn.onclick = () => {
+        upsertMyOrder(shopId, {
+          productId: docSnap.id,
+          name: p.name,
+          price: p.price
         });
+      };
 
-        total.innerText = `💰 總金額：$${data.totalAmount}`;
+      const div = document.createElement("div");
+      div.style.marginBottom = "6px";
+      div.appendChild(btn);
+      container.appendChild(div);
+    });
+  }
+
+  // =========================
+  // C-1. 即時購物車
+  // =========================
+  async function watchMyOrder(shopId) {
+    const profile = await liff.getProfile();
+    const orderRef = doc(db, "orders", `${shopId}_${profile.userId}`);
+
+    onSnapshot(orderRef, snap => {
+      const cart = document.getElementById("cart");
+      const total = document.getElementById("cart-total");
+
+      if (!snap.exists()) {
+        cart.innerHTML = "<i>尚未加入任何商品</i>";
+        total.innerText = "";
+        return;
+      }
+
+      const data = snap.data();
+      cart.innerHTML = "";
+
+      data.items.forEach(i => {
+        const div = document.createElement("div");
+        div.innerText = `${i.name} × ${i.qty} = $${i.price * i.qty}`;
+        cart.appendChild(div);
       });
-    }
 
-    // =========================
-    // 提供給按鈕呼叫
-    // =========================
-    window.testAdd = () => {
-      upsertMyOrder("shop001", {
-        productId: "p001",
-        name: "手工餅乾",
-        price: 120,
-        qty: 1
-      });
-    };
+      total.innerText = `💰 總金額：$${data.totalAmount}`;
+    });
+  }
 
-    // =========================
-    // LIFF 初始化
-    // =========================
-    const LIFF_ID = "2008849957-uFo5FsLU";
+  // =========================
+  // LIFF 初始化
+  // =========================
+  const LIFF_ID = "2008849957-uFo5FsLU";
 
-    liff.init({ liffId: LIFF_ID })
-      .then(() => {
-        if (!liff.isLoggedIn()) {
-          liff.login();
-          return;
-        }
-        return liff.getProfile();
-      })
-      .then(profile => {
-        if (!profile) return;
+  liff.init({ liffId: LIFF_ID })
+    .then(() => {
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
+      return liff.getProfile();
+    })
+    .then(profile => {
+      if (!profile) return;
 
-        document.getElementById("status").innerText = "登入成功";
-        document.getElementById("name").innerText =
-          "你好，" + profile.displayName;
+      document.getElementById("status").innerText = "登入成功";
+      document.getElementById("name").innerText = "你好，" + profile.displayName;
 
-        // 🔥 啟動購物車即時監聽
-        watchMyOrder("shop001");
-      })
-      .catch(err => {
-        document.getElementById("status").innerText = "錯誤：" + err;
-        console.error(err);
-      });
-  </script>
+      loadProducts("shop001");
+      watchMyOrder("shop001");
+    })
+    .catch(err => {
+      document.getElementById("status").innerText = "錯誤：" + err;
+      console.error(err);
+    });
+</script>
 </body>
 </html>
 
