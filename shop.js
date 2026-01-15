@@ -18,6 +18,7 @@ let USER = null;
 let SHOP_CLOSE_AT = null;
 let SHOP_CLOSED = false;
 
+
 /*
   productStats = {
     productId: { buyerCount: number }
