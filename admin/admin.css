@@ -93,4 +93,16 @@ input{
   gap: 4px;
 }
 
-hr{ border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.check-row{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+
+hr{
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}

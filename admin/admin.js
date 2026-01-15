@@ -51,34 +51,47 @@ document.getElementById("btn-cancel").onclick = () => {
 
 document.getElementById("btn-save").onclick = async () => {
   const name = document.getElementById("f-name").value.trim();
-  const price = Number(document.getElementById("f-price").value);
+  const priceRaw = document.getElementById("f-price").value.trim();
+  const price = Number(priceRaw);
+
   const imageUrl = document.getElementById("f-image").value.trim();
   const maxSalecount = Number(document.getElementById("f-max").value);
   const sort = Number(document.getElementById("f-sort").value);
   const enabled = document.getElementById("f-enabled").checked;
 
-  if (!name || !price) {
-    alert("請填寫商品名稱與價格");
+  if (!name) {
+    alert("請填寫商品名稱");
     return;
   }
 
-  const id = "p" + Date.now(); // 簡單唯一 ID
+  if (priceRaw === "" || Number.isNaN(price) || price <= 0) {
+    alert("請填寫正確的價格");
+    return;
+  }
 
-  await setDoc(doc(db, "products", SHOP_ID, "items", id), {
-    name,
-    price,
-    imageUrl,
-    maxSalecount,
-    sort,
-    enabled
-  });
+  const id = "p" + Date.now();
 
-  msgEl.innerText = "✅ 商品已新增";
-  formPanel.style.display = "none";
+  try {
+    await setDoc(doc(db, "products", SHOP_ID, "items", id), {
+      name,
+      price,
+      imageUrl,
+      maxSalecount,
+      sort,
+      enabled,
+      createdAt: Date.now()
+    });
 
-  clearForm();
-  loadProducts();
+    msgEl.innerText = "✅ 商品已新增";
+    formPanel.style.display = "none";
+    clearForm();
+    loadProducts();
+  } catch (err) {
+    console.error(err);
+    alert("❌ 儲存失敗，請看 Console");
+  }
 };
+
 
 function clearForm() {
   document.getElementById("f-name").value = "";
