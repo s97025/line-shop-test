@@ -42,7 +42,7 @@ export function initShop() {
       document.getElementById("name").innerText = "你好，" + profile.displayName;
 
       loadShopStatus().then(() => {
-        loadProducts();
+        watchProducts();
         watchDraft();
         watchSubmitted();
         watchProductStats();
@@ -98,72 +98,61 @@ async function removeDisabledItemsFromDraft(disabledProductIds) {
 
 
 /* =========================
-   商品列表
+   即時載入商品列表
 ========================= */
-async function loadProducts() {
+function watchProducts() {
   const q = query(
     collection(db, "products", SHOP_ID, "items"),
     orderBy("sort", "asc")
   );
 
-  const products = [];
-  const snap = await getDocs(q);
-  const box = document.getElementById("product-list");
-  box.innerHTML = "";
+  onSnapshot(q, snap => {
+    const box = document.getElementById("product-list");
+    box.innerHTML = "";
 
-  snap.forEach(docSnap => {
-    const p = docSnap.data();
-    const pid = docSnap.id;
+    snap.forEach(docSnap => {
+      const p = docSnap.data();
+      const pid = docSnap.id;
 
-    // 收集所有商品（不論是否上架）
-    products.push({ ...p, id: pid });
+      // 下架商品不顯示
+      if (p.enabled === false) return;
 
-    // 下架商品：不顯示在列表
-    if (p.enabled === false) return;
+      const sold = productStats[pid]?.buyerCount || 0;
+      const max = Number.isFinite(p.maxSalecount)
+        ? p.maxSalecount
+        : Infinity;
 
-    const div = document.createElement("div");
-    div.className = "card";
-    div.dataset.productId = pid;
-    div.__productData = p;
+      const remain = Math.max(0, max - sold);
+      const isSoldOut = Number.isFinite(max) && remain <= 0;
 
-    const sold = productStats[pid]?.buyerCount || 0;
-    const max = Number.isFinite(p.maxSalecount)
-      ? p.maxSalecount
-      : Infinity;
+      const div = document.createElement("div");
+      div.className = "card";
+      div.dataset.productId = pid;
+      div.__productData = p;
 
-    const remain = Math.max(0, max - sold);
-    const isSoldOut = Number.isFinite(max) && remain <= 0;
+      div.innerHTML = `
+        <b>${p.name}</b> $${p.price}
 
-    div.innerHTML = `
-      <b>${p.name}</b> $${p.price}
+        <div class="small stat ${isSoldOut ? "sold-out" : ""}">
+          已售出：${sold}
+          ${Number.isFinite(max)
+            ? `｜剩餘 <b>${remain}</b> 件`
+            : ""}
+        </div>
+      `;
 
-      <div class="small stat ${isSoldOut ? "sold-out" : ""}">
-        已售出：${sold}
-        ${Number.isFinite(max)
-          ? `｜剩餘: <b>${remain}</b> 件`
-          : ""}
-      </div>
-    `;
+      const btn = document.createElement("button");
+      btn.innerText = isSoldOut ? "已售完" : "加入購物車";
+      btn.disabled = SHOP_CLOSED || isSoldOut;
+      btn.classList.toggle("btn-disabled", isSoldOut);
+      btn.onclick = () => addToDraft(pid, p);
 
-
-    const btn = document.createElement("button");
-    btn.innerText = "加入購物車";
-    btn.disabled = SHOP_CLOSED || p.enabled === false || isSoldOut;
-    btn.classList.toggle("btn-disabled", isSoldOut);
-    btn.onclick = () => addToDraft(pid, p);
-
-    div.appendChild(btn);
-    box.appendChild(div);
+      div.appendChild(btn);
+      box.appendChild(div);
+    });
   });
-
-  // 找出已下架商品 ID
-  const disabledIds = products
-    .filter(p => p.enabled === false)
-    .map(p => p.id);
-
-  // 從購物車自動移除下架商品
-  removeDisabledItemsFromDraft(disabledIds);
 }
+
 
 /* =========================
    商品統計（從 orders 即時計算）
@@ -197,7 +186,7 @@ function watchProductStats() {
 
       const sold = productStats[pid]?.buyerCount || 0;
 
-      // 從 loadProducts 存進去的商品資料拿 max
+      // 從 watchProducts 存進去的商品資料拿 max
       const product = div.__productData;
       const max = Number.isFinite(product?.maxSalecount)
         ? product.maxSalecount

@@ -265,42 +265,54 @@ function watchOrdersForAutoDisable() {
   );
 
   onSnapshot(q, async snap => {
-    // 1. 重新算 sold
-    soldCountMap = {};
+    try {
+      // 1) 重算 soldCountMap
+      const soldCountMap = {};
 
-    snap.forEach(docSnap => {
-      const order = docSnap.data();
-      if (!Array.isArray(order.items)) return;
-
-      order.items.forEach(it => {
-        soldCountMap[it.productId] =
-          (soldCountMap[it.productId] || 0) + it.qty;
+      snap.forEach(docSnap => {
+        const order = docSnap.data();
+        if (!Array.isArray(order.items)) return;
+        order.items.forEach(it => {
+          // it.productId, it.qty 需存在
+          if (!it.productId || !it.qty) return;
+          soldCountMap[it.productId] =
+            (soldCountMap[it.productId] || 0) + it.qty;
+        });
       });
-    });
 
-    // 2. 撈所有商品
-    const prodSnap = await getDocs(
-      collection(db, "products", SHOP_ID, "items")
-    );
+      // 2) 撈所有商品
+      const prodSnap = await getDocs(
+        collection(db, "products", SHOP_ID, "items")
+      );
 
-    // 3. 檢查是否需要下架
-    prodSnap.forEach(d => {
-      const p = d.data();
-      const sold = soldCountMap[d.id] || 0;
-      const max = Number.isFinite(p.maxSalecount)
-        ? p.maxSalecount
-        : Infinity;
+      // 3) 檢查並自動下架
+      prodSnap.forEach(d => {
+        const p = d.data();
+        const pid = d.id;
+        const sold = soldCountMap[pid] || 0;
+        const max = Number.isFinite(p.maxSalecount)
+          ? p.maxSalecount
+          : Infinity;
 
-      if (sold >= max && p.enabled !== false) {
-        setDoc(
-          doc(db, "products", SHOP_ID, "items", d.id),
-          { enabled: false, autoDisabledAt: Date.now() },
-          { merge: true }
-        );
-      }
-    });
+        // 當已售 >= 上限，且目前還是 enabled，才下架
+        if (sold >= max && p.enabled !== false) {
+          setDoc(
+            doc(db, "products", SHOP_ID, "items", pid),
+            {
+              enabled: false,
+              autoDisabledAt: Date.now()
+            },
+            { merge: true }
+          );
+        }
+      });
+    } catch (e) {
+      // 捕捉錯誤並印出，避免整個 onSnapshot 中斷
+      console.error("watchOrdersForAutoDisable error:", e);
+    }
   });
 }
+
 
 
 
