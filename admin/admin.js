@@ -13,7 +13,6 @@ import {
 import { initializeApp } from
   "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 
-
   
 /* =========================
    Firebase init（admin）
@@ -28,11 +27,41 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+
+/* =========================
+   calculate sold Count
+========================= */
+
+async function loadSoldCounts() {
+  soldCountMap = {};
+
+  const q = query(
+    collection(db, "orders"),
+    where("shopId", "==", SHOP_ID),
+    where("status", "==", "submitted")
+  );
+
+  const snap = await getDocs(q);
+
+  snap.forEach(docSnap => {
+    const order = docSnap.data();
+    if (!Array.isArray(order.items)) return;
+
+    order.items.forEach(it => {
+      if (!it.productId || !it.qty) return;
+      soldCountMap[it.productId] =
+        (soldCountMap[it.productId] || 0) + it.qty;
+    });
+  });
+}
+
+
 /* =========================
    UI refs
 ========================= */
 
 let editingProductId = null;
+let soldCountMap = {};
 
 const listEl = document.getElementById("product-list");
 const msgEl = document.getElementById("msg");
@@ -139,6 +168,9 @@ async function loadProducts() {
   msgEl.innerText = "載入商品中…";
   listEl.innerHTML = "<i>載入中…</i>";
 
+  // 先算已購買數量
+  await loadSoldCounts();
+
   const q = query(
     collection(db, "products", SHOP_ID, "items"),
     orderBy("sort", "asc")
@@ -151,6 +183,9 @@ async function loadProducts() {
     const p = d.data();
 
     const div = document.createElement("div");
+    const sold = soldCountMap[d.id] || 0;
+    const max = p.maxSalecount;
+
     div.className = "card";
     div.innerHTML = `
       <div>
@@ -160,10 +195,9 @@ async function loadProducts() {
         <b>${p.name}</b>　$${p.price}
       </div>
 
-      <div class="small">
+      <div class="small ${sold >= max ? "sold-full" : "sold-ok"}">
         商品ID：${d.id}
-        ｜ 限購：${p.maxSalecount}
-        ｜ 排序：${p.sort}
+        已購買：${sold} / 限購：${max}
       </div>
 
       <div class="actions">

@@ -21,7 +21,21 @@ body{
 h2{ margin: 0 0 8px; }
 h3{ margin: 16px 0 8px; }
 
-.small{ font-size: .9rem; color: var(--muted); }
+.small{
+  font-size: .9rem;
+  color: var(--muted);
+}
+
+/* 已購買數量狀態 */
+.sold-ok {
+  color: #0b7a2a;
+}
+
+.sold-full {
+  color: #b00020;
+  font-weight: bold;
+}
+
 
 .panel{
   border: 1px solid var(--border);
