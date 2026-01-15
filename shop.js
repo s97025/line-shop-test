@@ -155,13 +155,23 @@ function watchDraft(){
       total+=it.price*it.qty;
       const div=document.createElement("div");
       div.className="cart-item";
-      div.innerHTML=`
-        <div>${it.name} × ${it.qty}</div>
-        <div>
-          <button ${SHOP_CLOSED?"disabled":""} onclick="updateQty('${it.productId}',1)">＋</button>
-          <button ${SHOP_CLOSED?"disabled":""} onclick="updateQty('${it.productId}',-1)">－</button>
-          <button ${SHOP_CLOSED?"disabled":""} onclick="removeItem('${it.productId}')">刪除</button>
+      div.innerHTML = `
+        <div class="cart-row">
+          <span class="cart-name">${it.name}</span>
+      
+          <div class="cart-stepper">
+            <button ${SHOP_CLOSED ? "disabled" : ""} onclick="updateQty('${it.productId}',-1)">－</button>
+            <span class="cart-qty">${it.qty}</span>
+            <button ${SHOP_CLOSED ? "disabled" : ""} onclick="updateQty('${it.productId}',1)">＋</button>
+          </div>
+      
+          <button class="cart-delete"
+            ${SHOP_CLOSED ? "disabled" : ""}
+            onclick="removeItem('${it.productId}')">
+            刪除
+          </button>
         </div>`;
+
       box.appendChild(div);
     });
     totalEl.innerText=`💰 總金額：$${total}`;
