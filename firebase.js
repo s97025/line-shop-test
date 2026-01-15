@@ -11,7 +11,9 @@ export function initFirebase() {
     authDomain: "line-shop-ef578.firebaseapp.com",
     projectId: "line-shop-ef578"
   };
-
+  
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
 }
+
+
