@@ -206,6 +206,12 @@ function watchProductStats() {
       const isSoldOut = Number.isFinite(max) && remain <= 0;
 
       statEl.classList.toggle("sold-out", isSoldOut);
+     
+      const btn = div.querySelector("button");
+      if (btn) {
+        btn.disabled = SHOP_CLOSED || product.enabled === false || isSoldOut;
+      }
+
 
       statEl.innerHTML = `
         已售出：${sold}
