@@ -191,10 +191,26 @@ function watchProductStats() {
     document.querySelectorAll("[data-product-id]").forEach(div => {
       const pid = div.dataset.productId;
       const statEl = div.querySelector(".stat");
-      if (statEl) {
-        statEl.innerText = `已訂購：${productStats[pid]?.buyerCount || 0}`;
-      }
+      if (!statEl) return;
+
+      const sold = productStats[pid]?.buyerCount || 0;
+
+      // 從 loadProducts 存進去的商品資料拿 max
+      const product = div.__productData;
+      const max = Number.isFinite(product?.maxSalecount)
+        ? product.maxSalecount
+        : Infinity;
+
+      const remain = Math.max(0, max - sold);
+
+      statEl.innerHTML = `
+        已售出：${sold}
+        ${Number.isFinite(max)
+          ? `｜剩餘 <b>${remain}</b> 件`
+          : ""}
+      `;
     });
+
   });
 }
 
