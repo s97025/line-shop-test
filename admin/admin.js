@@ -43,7 +43,7 @@ async function loadSoldCounts() {
     where("shopId", "==", SHOP_ID),
     where("status", "==", "submitted")
   );
-
+  
   const snap = await getDocs(q);
 
   snap.forEach(docSnap => {
@@ -189,13 +189,11 @@ async function autoDisableIfFull(productId, sold, max) {
    Load products
 ========================= */
 
-loadProducts();
-
 async function loadProducts() {
   msgEl.innerText = "載入商品中…";
   listEl.innerHTML = "<i>載入中…</i>";
 
-  // 先算已購買數量
+  // 只算 sold（用來顯示）
   await loadSoldCounts();
 
   const q = query(
@@ -204,18 +202,18 @@ async function loadProducts() {
   );
 
   const snap = await getDocs(q);
-
   listEl.innerHTML = "";
+
   snap.forEach(d => {
     const p = d.data();
+    const sold = soldCountMap[d.id] || 0;
+    const max = Number.isFinite(p.maxSalecount)
+      ? p.maxSalecount
+      : Infinity;
 
     const div = document.createElement("div");
-    const sold = soldCountMap[d.id] || 0;
-    const max = Number.isFinite(p.maxSalecount) ? p.maxSalecount : Infinity;
-
-    autoDisableIfFull(d.id, sold, max);
-
     div.className = "card";
+
     div.innerHTML = `
       <div>
         <span class="badge ${p.enabled ? "on" : "off"}">
@@ -256,3 +254,55 @@ async function loadProducts() {
 }
 
 
+/* =========================
+   自動化監聽
+========================= */
+function watchOrdersForAutoDisable() {
+  const q = query(
+    collection(db, "orders"),
+    where("shopId", "==", SHOP_ID),
+    where("status", "==", "submitted")
+  );
+
+  onSnapshot(q, async snap => {
+    // 1. 重新算 sold
+    soldCountMap = {};
+
+    snap.forEach(docSnap => {
+      const order = docSnap.data();
+      if (!Array.isArray(order.items)) return;
+
+      order.items.forEach(it => {
+        soldCountMap[it.productId] =
+          (soldCountMap[it.productId] || 0) + it.qty;
+      });
+    });
+
+    // 2. 撈所有商品
+    const prodSnap = await getDocs(
+      collection(db, "products", SHOP_ID, "items")
+    );
+
+    // 3. 檢查是否需要下架
+    prodSnap.forEach(d => {
+      const p = d.data();
+      const sold = soldCountMap[d.id] || 0;
+      const max = Number.isFinite(p.maxSalecount)
+        ? p.maxSalecount
+        : Infinity;
+
+      if (sold >= max && p.enabled !== false) {
+        setDoc(
+          doc(db, "products", SHOP_ID, "items", d.id),
+          { enabled: false, autoDisabledAt: Date.now() },
+          { merge: true }
+        );
+      }
+    });
+  });
+}
+
+
+
+watchOrdersForAutoDisable();
+loadProducts();

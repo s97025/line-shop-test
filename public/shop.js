@@ -125,12 +125,24 @@ async function loadProducts() {
     div.className = "card";
     div.dataset.productId = pid;
 
+    const sold = productStats[pid]?.buyerCount || 0;
+    const max = Number.isFinite(p.maxSalecount)
+      ? p.maxSalecount
+      : Infinity;
+
+    const remain = Math.max(0, max - sold);
+
     div.innerHTML = `
       <b>${p.name}</b> $${p.price}
+
       <div class="small stat">
-        已訂購：${productStats[pid]?.buyerCount || 0}
+        已售出：${sold}
+        ${Number.isFinite(max)
+          ? `｜剩餘 <b>${remain}</b> 件`
+          : ""}
       </div>
     `;
+
 
     const btn = document.createElement("button");
     btn.innerText = "加入購物車";
