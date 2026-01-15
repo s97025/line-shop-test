@@ -7,13 +7,16 @@ import {
   orderBy,
   setDoc,
   doc,
-  getFirestore
+  getFirestore,
+  where,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import { initializeApp } from
   "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 
-  
+let editingProductId = null;
+let soldCountMap = {};  
+
 /* =========================
    Firebase init（admin）
 ========================= */
@@ -59,9 +62,6 @@ async function loadSoldCounts() {
 /* =========================
    UI refs
 ========================= */
-
-let editingProductId = null;
-let soldCountMap = {};
 
 const listEl = document.getElementById("product-list");
 const msgEl = document.getElementById("msg");
@@ -184,7 +184,7 @@ async function loadProducts() {
 
     const div = document.createElement("div");
     const sold = soldCountMap[d.id] || 0;
-    const max = p.maxSalecount;
+    const max = p.maxSalecount ?? 0;
 
     div.className = "card";
     div.innerHTML = `
