@@ -1,4 +1,4 @@
-import { db } from "./firebase.js";
+import { db } from "../shared/firebase.js";
 import {
   collection, query, where, orderBy, getDocs,
   doc, setDoc, getDoc, updateDoc, deleteDoc,
