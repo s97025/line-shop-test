@@ -11,6 +11,7 @@ import {
 const SHOP_ID = "shop001";
 const LIFF_ID = "2008849957-uFo5FsLU";
 
+
 /* =========================
    Global state
 ========================= */
