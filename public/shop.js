@@ -132,11 +132,12 @@ async function loadProducts() {
       : Infinity;
 
     const remain = Math.max(0, max - sold);
+    const isSoldOut = Number.isFinite(max) && remain <= 0;
 
     div.innerHTML = `
       <b>${p.name}</b> $${p.price}
 
-      <div class="small stat">
+      <div class="small stat ${isSoldOut ? "sold-out" : ""}">
         已售出：${sold}
         ${Number.isFinite(max)
           ? `｜剩餘: <b>${remain}</b> 件`
@@ -147,7 +148,7 @@ async function loadProducts() {
 
     const btn = document.createElement("button");
     btn.innerText = "加入購物車";
-    btn.disabled = SHOP_CLOSED || p.enabled === false;
+    btn.disabled = SHOP_CLOSED || p.enabled === false || isSoldOut;
     btn.onclick = () => addToDraft(pid, p);
 
     div.appendChild(btn);
@@ -202,6 +203,9 @@ function watchProductStats() {
         : Infinity;
 
       const remain = Math.max(0, max - sold);
+      const isSoldOut = Number.isFinite(max) && remain <= 0;
+
+      statEl.classList.toggle("sold-out", isSoldOut);
 
       statEl.innerHTML = `
         已售出：${sold}
@@ -209,6 +213,7 @@ function watchProductStats() {
           ? `｜剩餘 <b>${remain}</b> 件`
           : ""}
       `;
+
     });
 
   });

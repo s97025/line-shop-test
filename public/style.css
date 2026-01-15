@@ -129,6 +129,16 @@ button:disabled {
   background: none;
 }
 
+
+/* =========================
+   Sold out styles
+========================= */
+
+.stat.sold-out {
+  color: #b00020;
+  font-weight: bold;
+}
+
 /* =========================
    Mobile (LINE / 手機)
 ========================= */
