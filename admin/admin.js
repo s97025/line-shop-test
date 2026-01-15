@@ -13,6 +13,8 @@ import {
 import { initializeApp } from
   "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 
+
+  
 /* =========================
    Firebase init（admin）
 ========================= */
@@ -30,6 +32,8 @@ const db = getFirestore(app);
    UI refs
 ========================= */
 
+let editingProductId = null;
+
 const listEl = document.getElementById("product-list");
 const msgEl = document.getElementById("msg");
 const formPanel = document.getElementById("form-panel");
@@ -38,6 +42,9 @@ document.getElementById("env").innerText = `SHOP_ID = ${SHOP_ID}`;
 
 document.getElementById("btn-refresh").onclick = loadProducts;
 document.getElementById("btn-new").onclick = () => {
+  editingProductId = null;
+  clearForm();
+  document.querySelector("#form-panel h3").innerText = "➕ 新增商品";
   formPanel.style.display = "block";
 };
 
@@ -69,20 +76,39 @@ document.getElementById("btn-save").onclick = async () => {
     return;
   }
 
-  const id = "p" + Date.now();
-
   try {
-    await setDoc(doc(db, "products", SHOP_ID, "items", id), {
-      name,
-      price,
-      imageUrl,
-      maxSalecount,
-      sort,
-      enabled,
-      createdAt: Date.now()
-    });
+    if (editingProductId) {
+      // ✅ 編輯既有商品
+      await setDoc(
+        doc(db, "products", SHOP_ID, "items", editingProductId),
+        {
+          name,
+          price,
+          imageUrl,
+          maxSalecount,
+          sort,
+          enabled,
+          updatedAt: Date.now()
+        },
+        { merge: true }
+      );
+      msgEl.innerText = "✅ 商品已更新";
+    } else {
+      // ✅ 新增商品
+      const id = "p" + Date.now();
+      await setDoc(doc(db, "products", SHOP_ID, "items", id), {
+        name,
+        price,
+        imageUrl,
+        maxSalecount,
+        sort,
+        enabled,
+        createdAt: Date.now()
+      });
+      msgEl.innerText = "✅ 商品已新增";
+    }
 
-    msgEl.innerText = "✅ 商品已新增";
+    editingProductId = null;
     formPanel.style.display = "none";
     clearForm();
     loadProducts();
@@ -91,6 +117,7 @@ document.getElementById("btn-save").onclick = async () => {
     alert("❌ 儲存失敗，請看 Console");
   }
 };
+
 
 
 function clearForm() {
@@ -132,12 +159,33 @@ async function loadProducts() {
         </span>
         <b>${p.name}</b>　$${p.price}
       </div>
+
       <div class="small">
         商品ID：${d.id}
         ｜ 限購：${p.maxSalecount}
         ｜ 排序：${p.sort}
       </div>
+
+      <div class="actions">
+        <button class="btn-edit">✏️ 編輯</button>
+      </div>
     `;
+
+    div.querySelector(".btn-edit").onclick = () => {
+      editingProductId = d.id;
+
+      document.getElementById("f-id").value = d.id;
+      document.getElementById("f-name").value = p.name;
+      document.getElementById("f-price").value = p.price;
+      document.getElementById("f-image").value = p.imageUrl || "";
+      document.getElementById("f-max").value = p.maxSalecount ?? 0;
+      document.getElementById("f-sort").value = p.sort ?? 0;
+      document.getElementById("f-enabled").checked = !!p.enabled;
+
+      document.querySelector("#form-panel h3").innerText = "✏️ 編輯商品";
+      formPanel.style.display = "block";
+    };
+
     listEl.appendChild(div);
   });
 
