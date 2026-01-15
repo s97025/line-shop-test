@@ -138,7 +138,7 @@ async function loadProducts() {
       <div class="small stat">
         已售出：${sold}
         ${Number.isFinite(max)
-          ? `｜剩餘 <b>${remain}</b> 件`
+          ? `｜剩餘: <b>${remain}</b> `
           : ""}
       </div>
     `;
