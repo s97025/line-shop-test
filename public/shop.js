@@ -69,16 +69,44 @@ async function loadShopStatus() {
   el.style.color = SHOP_CLOSED ? "red" : "green";
 }
 
+/* =================================
+   remove Disabled Items From Draft
+   if Sold Max Count
+================================= */
+async function removeDisabledItemsFromDraft(disabledProductIds) {
+  const ref = draftRef();
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+
+  let items = snap.data().items || [];
+  const filtered = items.filter(
+    it => !disabledProductIds.includes(it.productId)
+  );
+
+  if (filtered.length === items.length) return;
+
+  if (filtered.length === 0) {
+    await deleteDoc(ref);
+  } else {
+    await updateDoc(ref, {
+      items: filtered,
+      updatedAt: serverTimestamp()
+    });
+  }
+}
+
+
+
 /* =========================
    商品列表
 ========================= */
 async function loadProducts() {
   const q = query(
     collection(db, "products", SHOP_ID, "items"),
-    where("enabled", "==", true),
     orderBy("sort", "asc")
   );
 
+  const products = [];
   const snap = await getDocs(q);
   const box = document.getElementById("product-list");
   box.innerHTML = "";
@@ -86,6 +114,12 @@ async function loadProducts() {
   snap.forEach(docSnap => {
     const p = docSnap.data();
     const pid = docSnap.id;
+
+    // 收集所有商品（不論是否上架）
+    products.push({ ...p, id: pid });
+
+    // 下架商品：不顯示在列表
+    if (p.enabled === false) return;
 
     const div = document.createElement("div");
     div.className = "card";
@@ -100,12 +134,20 @@ async function loadProducts() {
 
     const btn = document.createElement("button");
     btn.innerText = "加入購物車";
-    btn.disabled = SHOP_CLOSED;
+    btn.disabled = SHOP_CLOSED || p.enabled === false;
     btn.onclick = () => addToDraft(pid, p);
 
     div.appendChild(btn);
     box.appendChild(div);
   });
+
+  // 找出已下架商品 ID
+  const disabledIds = products
+    .filter(p => p.enabled === false)
+    .map(p => p.id);
+
+  // 從購物車自動移除下架商品
+  removeDisabledItemsFromDraft(disabledIds);
 }
 
 /* =========================

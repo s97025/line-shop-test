@@ -158,6 +158,33 @@ function clearForm() {
   document.getElementById("f-enabled").checked = true;
 }
 
+
+/* ===============================
+   auto Disable If sold max Count
+=============================== */
+
+async function autoDisableIfFull(productId, sold, max) {
+  if (!Number.isFinite(max)) return;
+  if (sold < max) return;
+
+  const ref = doc(db, "products", SHOP_ID, "items", productId);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) return;
+  if (snap.data().enabled === false) return;
+
+  await setDoc(
+    ref,
+    {
+      enabled: false,
+      autoDisabledAt: Date.now()
+    },
+    { merge: true }
+  );
+}
+
+
+
 /* =========================
    Load products
 ========================= */
@@ -184,7 +211,9 @@ async function loadProducts() {
 
     const div = document.createElement("div");
     const sold = soldCountMap[d.id] || 0;
-    const max = p.maxSalecount ?? 0;
+    const max = Number.isFinite(p.maxSalecount) ? p.maxSalecount : Infinity;
+
+    autoDisableIfFull(d.id, sold, max);
 
     div.className = "card";
     div.innerHTML = `
@@ -225,3 +254,5 @@ async function loadProducts() {
 
   msgEl.innerText = `✅ 載入完成（${snap.size} 筆）`;
 }
+
+
