@@ -139,7 +139,7 @@ async function loadProducts() {
       <div class="small stat">
         已售出：${sold}
         ${Number.isFinite(max)
-          ? `｜剩餘: <b>${remain}</b> `
+          ? `｜剩餘: <b>${remain}</b> 件`
           : ""}
       </div>
     `;
@@ -227,9 +227,22 @@ function draftRef() {
 async function addToDraft(pid, product) {
   if (SHOP_CLOSED) return;
 
+  const sold = productStats[pid]?.buyerCount || 0;
+  const max = Number.isFinite(product.maxSalecount)
+    ? product.maxSalecount
+    : Infinity;
+
   const ref = draftRef();
   const snap = await getDoc(ref);
-  let items = snap.exists() ? snap.data().items : [];
+  const items = snap.exists() ? snap.data().items : [];
+
+  const inCart =
+    items.find(i => i.productId === pid)?.qty || 0;
+
+  if (sold + inCart >= max) {
+    alert("❌ 此商品剩餘數量不足");
+    return;
+  }
 
   const it = items.find(i => i.productId === pid);
   if (it) {
@@ -252,6 +265,7 @@ async function addToDraft(pid, product) {
   });
 }
 
+
 /* =========================
    Qty controls (global)
 ========================= */
@@ -260,7 +274,36 @@ window.updateQty = async (pid, delta) => {
   const snap = await getDoc(ref);
   if (!snap.exists()) return;
 
-  let items = snap.data().items
+  let items = snap.data().items;
+  const target = items.find(i => i.productId === pid);
+  if (!target) return;
+
+  /* =========================
+     🔒 防超賣（只在 + 時檢查）
+  ========================= */
+  if (delta > 0) {
+    const sold = productStats[pid]?.buyerCount || 0;
+
+    // 從商品卡片取 maxSalecount
+    const productCard =
+      document.querySelector(`[data-product-id="${pid}"]`);
+    const product = productCard?.__productData;
+
+    const max = Number.isFinite(product?.maxSalecount)
+      ? product.maxSalecount
+      : Infinity;
+
+    // 已售出 + 購物車內數量 >= 上限 → 擋
+    if (sold + target.qty >= max) {
+      alert("❌ 已達此商品限購上限");
+      return;
+    }
+  }
+
+  /* =========================
+     實際更新數量
+  ========================= */
+  items = items
     .map(i => {
       if (i.productId === pid) {
         i.qty += delta;
@@ -280,6 +323,7 @@ window.updateQty = async (pid, delta) => {
 };
 
 window.removeItem = pid => window.updateQty(pid, -999);
+
 
 /* =========================
    Watch draft (購物車)
