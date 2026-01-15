@@ -196,7 +196,7 @@ async function loadProducts() {
       </div>
 
       <div class="small ${sold >= max ? "sold-full" : "sold-ok"}">
-        商品ID：${d.id}
+        <!-- 商品ID：${d.id} -->
         已購買：${sold} / 限購：${max}
       </div>
 
