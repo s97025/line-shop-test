@@ -124,6 +124,7 @@ async function loadProducts() {
     const div = document.createElement("div");
     div.className = "card";
     div.dataset.productId = pid;
+    div.__productData = p;
 
     const sold = productStats[pid]?.buyerCount || 0;
     const max = Number.isFinite(p.maxSalecount)
