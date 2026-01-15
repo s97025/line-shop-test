@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>主揪後台｜商品管理</title>
+  <link rel="stylesheet" href="./admin.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h2>🛠 主揪後台：商品管理</h2>
+    <div class="small" id="env"></div>
+  </header>
+
+  <section class="panel">
+    <div class="row">
+      <button id="btn-new">＋ 新增商品</button>
+      <button id="btn-refresh">🔄 重新整理</button>
+    </div>
+    <div id="msg" class="small"></div>
+  </section>
+
+  <section>
+    <h3>📦 商品列表</h3>
+    <div id="product-list"><i>載入中…</i></div>
+  </section>
+
+  <script type="module" src="./admin.js"></script>
+</body>
+</html>
