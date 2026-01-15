@@ -9,6 +9,7 @@ import {
   doc,
   getFirestore,
   where,
+  onSnapshot,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import { initializeApp } from
