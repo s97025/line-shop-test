@@ -140,6 +140,17 @@ button:disabled {
 }
 
 /* =========================
+   Disabled button (LINE-safe)
+========================= */
+
+button.btn-disabled {
+  background: #ccc !important;
+  color: #777 !important;
+  opacity: 0.6;
+  pointer-events: none; /* LINE WebView 關鍵 */
+}
+
+/* =========================
    Mobile (LINE / 手機)
 ========================= */
 

@@ -149,6 +149,7 @@ async function loadProducts() {
     const btn = document.createElement("button");
     btn.innerText = "加入購物車";
     btn.disabled = SHOP_CLOSED || p.enabled === false || isSoldOut;
+    btn.classList.toggle("btn-disabled", isSoldOut);
     btn.onclick = () => addToDraft(pid, p);
 
     div.appendChild(btn);
@@ -210,6 +211,7 @@ function watchProductStats() {
       const btn = div.querySelector("button");
       if (btn) {
         btn.disabled = SHOP_CLOSED || product.enabled === false || isSoldOut;
+        btn.classList.toggle("btn-disabled", isSoldOut);
       }
 
 
