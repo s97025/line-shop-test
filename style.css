@@ -44,7 +44,8 @@ h3 {
 }
 
 /* =========================
-   Buttons (default = 主按鈕)
+   Buttons (Primary only)
+   👉 只給「主操作」用
 ========================= */
 
 button {
@@ -61,30 +62,71 @@ button:disabled {
 }
 
 /* =========================
-   Cart items
+   Cart item wrapper
+   👉 只負責間距，不管排版
 ========================= */
 
 .cart-item {
+  margin-bottom: 8px;
+}
+
+/* =========================
+   Shopee-like cart layout
+========================= */
+
+/* 一整列：商品名稱 + stepper + 刪除 */
+.cart-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-/* 🔥 購物車小按鈕（+ - 刪除） */
-.cart-item button {
-  font-size: 0.85rem;
-  padding: 4px 8px;
+/* 商品名稱 */
+.cart-name {
+  flex: 1;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+/* =========================
+   Quantity stepper
+========================= */
+
+.cart-stepper {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ccc;
   border-radius: 6px;
-  width: auto;
-  min-width: 36px;
-  margin-left: 4px;
+  overflow: hidden;
 }
 
-/* 刪除按鈕弱化（避免誤點） */
-.cart-item button:last-child {
+.cart-stepper button {
+  font-size: 0.9rem;
+  padding: 4px 8px;
+  border-radius: 0;
+  width: auto;
+  min-width: 32px;
+}
+
+.cart-qty {
+  min-width: 28px;
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+/* =========================
+   Delete button (danger)
+========================= */
+
+.cart-delete {
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  margin-left: 6px;
   color: #b00020;
-  border-color: #b00020;
+  border: 1px solid #b00020;
+  border-radius: 6px;
+  background: none;
 }
 
 /* =========================
@@ -92,17 +134,31 @@ button:disabled {
 ========================= */
 
 @media (max-width: 480px) {
+
   html {
     font-size: 19px;
   }
 
-  /* 主按鈕（送出訂單）滿版 */
-  button {
+  /* 只有主操作（送出訂單）滿版 */
+  #submit-btn {
     width: 100%;
   }
 
-  /* 但購物車的小按鈕不要滿版 */
-  .cart-item button {
+  /* 所有購物車相關按鈕都不滿版 */
+  .cart-row button {
     width: auto;
+  }
+
+  /* 手機上稍微縮一點間距 */
+  .cart-row {
+    gap: 6px;
+  }
+
+  .cart-name {
+    font-size: 0.95rem;
+  }
+
+  .cart-stepper button {
+    padding: 6px 10px;
   }
 }
