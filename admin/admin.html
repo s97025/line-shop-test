@@ -20,6 +20,48 @@
     <div id="msg" class="small"></div>
   </section>
 
+  <section class="panel" id="form-panel" style="display:none;">
+    <h3>➕ 新增商品</h3>
+
+    <div class="form">
+      <label>
+        商品名稱
+        <input id="f-name" placeholder="例如：草莓蛋糕" />
+      </label>
+
+      <label>
+        價格
+        <input id="f-price" type="number" placeholder="例如：200" />
+      </label>
+
+      <label>
+        圖片 URL
+        <input id="f-image" placeholder="https://..." />
+      </label>
+
+      <label>
+        限購數量
+        <input id="f-max" type="number" value="50" />
+      </label>
+
+      <label>
+        排序（數字小的在前）
+        <input id="f-sort" type="number" value="0" />
+      </label>
+
+      <label class="row">
+        <input id="f-enabled" type="checkbox" checked />
+        上架
+      </label>
+
+      <div class="row">
+        <button id="btn-save">💾 儲存商品</button>
+        <button id="btn-cancel" type="button">取消</button>
+      </div>
+    </div>
+  </section>
+
+
   <section>
     <h3>📦 商品列表</h3>
     <div id="product-list"><i>載入中…</i></div>
