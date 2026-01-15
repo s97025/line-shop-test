@@ -59,7 +59,7 @@ let USER = null;
 let SHOP_CLOSE_AT = null;
 let SHOP_CLOSED = false;
 
-/* 🔥 新增：商品統計（buyerCount） */
+/* 商品統計 */
 let productStats = {};
 
 /* =========================
@@ -118,7 +118,7 @@ async function loadProducts() {
 }
 
 /* =========================
-   🔥 新增：商品統計（只算 submitted）
+   商品統計（submitted only）
 ========================= */
 function watchProductStats() {
   const q = query(
@@ -156,7 +156,7 @@ function updateProductStatsUI() {
 }
 
 /* =========================
-   Draft（購物車）
+   Draft cart
 ========================= */
 function draftRef(){
   return doc(db,"orders",`${SHOP_ID}_${USER.userId}_draft`);
@@ -227,10 +227,14 @@ window.removeItem=async(pid)=>{
   window.updateQty(pid,-999);
 };
 
+/* =========================
+   Submit order（🔥 修正點）
+========================= */
 document.getElementById("submit-btn").onclick=async()=>{
   if (SHOP_CLOSED) return;
   const snap=await getDoc(draftRef());
   if (!snap.exists()) return;
+
   const data=snap.data();
   const now=new Date();
   const cancelDeadline=new Date(SHOP_CLOSE_AT.getTime()-24*60*60*1000);
@@ -241,6 +245,7 @@ document.getElementById("submit-btn").onclick=async()=>{
       ...data,
       status:"submitted",
       submittedAt:serverTimestamp(),
+      submittedAtClient: now,   // ✅ 關鍵修正
       cancelDeadline:Timestamp.fromDate(cancelDeadline)
     }
   );
@@ -248,7 +253,7 @@ document.getElementById("submit-btn").onclick=async()=>{
 };
 
 /* =========================
-   Submitted orders
+   Submitted orders（🔥 修正點）
 ========================= */
 function watchSubmitted(){
   const q=query(
@@ -256,8 +261,9 @@ function watchSubmitted(){
     where("shopId","==",SHOP_ID),
     where("userId","==",USER.userId),
     where("status","==","submitted"),
-    orderBy("submittedAt","desc")
+    orderBy("submittedAtClient","desc") // ✅ 改這裡
   );
+
   onSnapshot(q,snap=>{
     const box=document.getElementById("submitted-orders");
     box.innerHTML="";
@@ -269,16 +275,26 @@ function watchSubmitted(){
       const o=d.data();
       const div=document.createElement("div");
       div.className="card";
-      let html=`<div class="small">送出時間：${o.submittedAt?.toDate().toLocaleString()}</div>`;
+
+      let html=`
+        <div class="small">
+          送出時間：
+          ${o.submittedAt?.toDate().toLocaleString() ?? "處理中…"}
+        </div>
+      `;
+
       o.items.forEach(i=>{
         html+=`<div>${i.name} × ${i.qty}</div>`;
       });
+
       const remain=o.cancelDeadline
         ? Math.max(0,Math.floor((o.cancelDeadline.toDate()-Date.now())/3600000))
         : 0;
+
       if (remain>0){
         html+=`<button onclick="cancelOrder('${d.id}')">反悔取消（${remain}h）</button>`;
       }
+
       div.innerHTML=html;
       box.appendChild(div);
     });
@@ -304,7 +320,7 @@ liff.init({liffId:LIFF_ID}).then(()=>{
     loadProducts();
     watchDraft();
     watchSubmitted();
-    watchProductStats(); // 🔥 啟動商品統計
+    watchProductStats();
   });
 });
 </script>
