@@ -244,7 +244,7 @@ function watchOrdersForAutoDisable() {
           ? p.maxSalecount
           : Infinity;
 
-        // 當已售 >= 上限，而且目前還沒下架 → 自動下架
+        // 自動上下架
         if (
           Number.isFinite(max) &&
           sold >= max &&
@@ -259,6 +259,23 @@ function watchOrdersForAutoDisable() {
             { merge: true }
           );
         }
+
+        // === 自動重新上架（你要的） ===
+        if (
+          Number.isFinite(max) &&
+          sold < max &&
+          p.enabled === false
+        ) {
+          setDoc(
+            doc(db, "products", SHOP_ID, "items", pid),
+            {
+              enabled: true,
+              autoEnabledAt: Date.now()
+            },
+            { merge: true }
+          );
+        }
+
       });
 
 
