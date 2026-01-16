@@ -115,7 +115,7 @@ function watchProducts() {
       const pid = docSnap.id;
 
       // 下架商品不顯示
-      if (p.enabled === false) return;
+      // if (p.enabled === false) return;
 
       const sold = productStats[pid]?.buyerCount || 0;
       const max = Number.isFinite(p.maxSalecount)
