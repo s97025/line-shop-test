@@ -245,9 +245,11 @@ function watchOrdersForAutoDisable() {
           : Infinity;
 
         // 當已售 >= 上限，而且目前還沒下架 → 自動下架
-        if (Number.isFinite(max) && 
-            sold >= max &&
-            p.enabled !== false) {
+        if (
+          Number.isFinite(max) &&
+          sold >= max &&
+          p.enabled !== false
+        ) {
           setDoc(
             doc(db, "products", SHOP_ID, "items", pid),
             {
