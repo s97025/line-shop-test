@@ -17,6 +17,7 @@ import { initializeApp } from
 
 let editingProductId = null;
 let soldCountMap = {};  
+let latestProductsSnap = null;
 
 /* =========================
    Firebase init（admin）
@@ -33,34 +34,6 @@ const db = getFirestore(app);
 
 
 /* =========================
-   calculate sold Count
-========================= */
-
-async function loadSoldCounts() {
-  soldCountMap = {};
-
-  const q = query(
-    collection(db, "orders"),
-    where("shopId", "==", SHOP_ID),
-    where("status", "==", "submitted")
-  );
-  
-  const snap = await getDocs(q);
-
-  snap.forEach(docSnap => {
-    const order = docSnap.data();
-    if (!Array.isArray(order.items)) return;
-
-    order.items.forEach(it => {
-      if (!it.productId || !it.qty) return;
-      soldCountMap[it.productId] =
-        (soldCountMap[it.productId] || 0) + it.qty;
-    });
-  });
-}
-
-
-/* =========================
    UI refs
 ========================= */
 
@@ -70,7 +43,11 @@ const formPanel = document.getElementById("form-panel");
 
 document.getElementById("env").innerText = `SHOP_ID = ${SHOP_ID}`;
 
-document.getElementById("btn-refresh").onclick = loadProducts;
+document.getElementById("btn-refresh").onclick = () => {
+  if (!latestProductsSnap) return;
+  renderProductsFromSnap(latestProductsSnap);
+};
+
 document.getElementById("btn-new").onclick = () => {
   editingProductId = null;
   clearForm();
@@ -141,7 +118,6 @@ document.getElementById("btn-save").onclick = async () => {
     editingProductId = null;
     formPanel.style.display = "none";
     clearForm();
-    loadProducts();
   } catch (err) {
     console.error(err);
     alert("❌ 儲存失敗，請看 Console");
@@ -159,50 +135,10 @@ function clearForm() {
   document.getElementById("f-enabled").checked = true;
 }
 
-
-/* ===============================
-   auto Disable If sold max Count
-=============================== */
-
-async function autoDisableIfFull(productId, sold, max) {
-  if (!Number.isFinite(max)) return;
-  if (sold < max) return;
-
-  const ref = doc(db, "products", SHOP_ID, "items", productId);
-  const snap = await getDoc(ref);
-
-  if (!snap.exists()) return;
-  if (snap.data().enabled === false) return;
-
-  await setDoc(
-    ref,
-    {
-      enabled: false,
-      autoDisabledAt: Date.now()
-    },
-    { merge: true }
-  );
-}
-
-
-
 /* =========================
-   Load products
+   watch Products
 ========================= */
-
-async function loadProducts() {
-  msgEl.innerText = "載入商品中…";
-  listEl.innerHTML = "<i>載入中…</i>";
-
-  // 只算 sold（用來顯示）
-  await loadSoldCounts();
-
-  const q = query(
-    collection(db, "products", SHOP_ID, "items"),
-    orderBy("sort", "asc")
-  );
-
-  const snap = await getDocs(q);
+function renderProductsFromSnap(snap) {
   listEl.innerHTML = "";
 
   snap.forEach(d => {
@@ -224,7 +160,6 @@ async function loadProducts() {
       </div>
 
       <div class="small ${sold >= max ? "sold-full" : "sold-ok"}">
-        <!-- 商品ID：${d.id} -->
         已購買：${sold} / 限購：${max}
       </div>
 
@@ -236,7 +171,6 @@ async function loadProducts() {
     div.querySelector(".btn-edit").onclick = () => {
       editingProductId = d.id;
 
-      document.getElementById("f-id").value = d.id;
       document.getElementById("f-name").value = p.name;
       document.getElementById("f-price").value = p.price;
       document.getElementById("f-image").value = p.imageUrl || "";
@@ -255,6 +189,22 @@ async function loadProducts() {
 }
 
 
+function watchProducts() {
+  msgEl.innerText = "載入商品中…";
+  listEl.innerHTML = "<i>載入中…</i>";
+
+  const q = query(
+    collection(db, "products", SHOP_ID, "items"),
+    orderBy("sort", "asc")
+  );
+
+  onSnapshot(q, snap => {
+    latestProductsSnap = snap;
+    renderProductsFromSnap(latestProductsSnap);
+  });
+}
+
+
 /* =========================
    自動化監聽
 ========================= */
@@ -268,7 +218,7 @@ function watchOrdersForAutoDisable() {
   onSnapshot(q, async snap => {
     try {
       // 1) 重算 soldCountMap
-      const soldCountMap = {};
+      soldCountMap = {};
 
       snap.forEach(docSnap => {
         const order = docSnap.data();
@@ -280,23 +230,24 @@ function watchOrdersForAutoDisable() {
             (soldCountMap[it.productId] || 0) + it.qty;
         });
       });
+      
+      // 如果商品快照還沒來，不做任何事
+      if (!latestProductsSnap) return;
 
-      // 2) 撈所有商品
-      const prodSnap = await getDocs(
-        collection(db, "products", SHOP_ID, "items")
-      );
-
-      // 3) 檢查並自動下架
-      prodSnap.forEach(d => {
+      // 用「目前畫面正在看的商品快照」來判斷
+      latestProductsSnap.forEach(d => {
         const p = d.data();
         const pid = d.id;
+
         const sold = soldCountMap[pid] || 0;
         const max = Number.isFinite(p.maxSalecount)
           ? p.maxSalecount
           : Infinity;
 
-        // 當已售 >= 上限，且目前還是 enabled，才下架
-        if (sold >= max && p.enabled !== false) {
+        // 當已售 >= 上限，而且目前還沒下架 → 自動下架
+        if (Number.isFinite(max) && 
+            sold >= max &&
+            p.enabled !== false) {
           setDoc(
             doc(db, "products", SHOP_ID, "items", pid),
             {
@@ -307,6 +258,11 @@ function watchOrdersForAutoDisable() {
           );
         }
       });
+
+
+      if (latestProductsSnap) {
+        renderProductsFromSnap(latestProductsSnap);
+      }
     } catch (e) {
       // 捕捉錯誤並印出，避免整個 onSnapshot 中斷
       console.error("watchOrdersForAutoDisable error:", e);
@@ -317,5 +273,5 @@ function watchOrdersForAutoDisable() {
 
 
 
-watchOrdersForAutoDisable();
-loadProducts();
+watchProducts();              // 商品即時
+watchOrdersForAutoDisable();  // 訂單即時 → 自動下架
